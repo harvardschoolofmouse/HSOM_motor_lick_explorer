@@ -234,6 +234,10 @@ classdef CLASS_video_lick_obj < handle
 				[f,ax] = makeStandardFigure();
                 set(f, 'units', 'pixels');
 		        set(f, 'position', [1600, 0, zoom*Width+125, zoom*Height+125])
+                set(f, 'units', 'normalized')
+                fpos = get(f, 'position');
+                fpos(1) = 0.7;
+                set(f, 'position', fpos)
                 set(f, 'name', [obj.iv.name, ' | video #' num2str(fileNo)])
                 set(f, 'userdata', [obj.iv.name, ' | video #' num2str(fileNo)])
                 set(ax, 'units', 'pixels')
@@ -594,7 +598,7 @@ classdef CLASS_video_lick_obj < handle
 
 			title(ax, 'video = r. | CED = bo')
 		end
-		function trial_starts_in_question = QCvideoTrialStarts(obj)
+		function trial_starts_in_question = QCvideoTrialStarts_old(obj)
 			% 
 			% 	asks the min time between trials with CED then finds any events less than that with cam
 			% 
@@ -602,7 +606,7 @@ classdef CLASS_video_lick_obj < handle
 			trial_lengths_in_frames_camera = (obj.video.lampOFF.frames(2:end) - obj.video.lampOFF.frames(1:end-1))';
 			trial_starts_in_question = obj.video.lampOFF.frames(find(trial_lengths_in_frames_camera<mintrial_in_frames)+1);
 		end
-		function UIcleanUpTrialStarts(obj)
+		function UIcleanUpTrialStarts_old(obj)
 			% ask user to clean up the data by presenting it as figs and
             % asking for a decision
             %
@@ -627,6 +631,57 @@ classdef CLASS_video_lick_obj < handle
     			end
     			trial_starts_in_question = obj.QCvideoTrialStarts;
         	end
+		end
+        function [trial_starts_in_question, frames_starts_in_question] = QCvideoTrialStarts(obj)
+			% 
+			% 	Find any trial-starts in CED not matched by a camera trial start.
+			% 
+			CEDtrialstarts_not_found_by_camera = find(...
+				~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames)...
+			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+1)...
+			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+2)...
+			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-1)...
+			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-2));
+            frames_starts_in_question = obj.CED.CamO_trialStart_frames_wrt_IRtrig(CEDtrialstarts_not_found_by_camera);
+			% CEDtrialstarts_not_found_by_camera = find(~ismembertol(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames, 1));
+			trial_starts_in_question = CEDtrialstarts_not_found_by_camera;
+		end
+		function UIcleanUpTrialStarts(obj)
+			% ask user to clean up the data by presenting it as figs and
+            % asking for a decision
+            %
+            % start by getting disagreements:
+            [trial_starts_in_question,frames_starts_in_question] = obj.QCvideoTrialStarts;
+            ax = obj.plotTrialStarts;
+        	disp(['Uh oh! we have ' num2str(numel(trial_starts_in_question)) ' discrepancies with CED'])
+        	% show bad trials till we reject
+        	for ii = 1:numel(trial_starts_in_question)
+            	xlim(ax, [frames_starts_in_question(ii)-70,frames_starts_in_question(ii)+70])
+                yy = get(ax, 'ylim');
+                plot(ax, [frames_starts_in_question(ii), frames_starts_in_question(ii)],yy, 'r--')
+            	% use the CED timestamp?
+            	answer = questdlg('Use CED timestamp for this trial?');
+            	if strcmp(answer, 'Yes')
+            		obj.video.lampOFF.frames(end+1) = obj.CED.CamO_trialStart_frames_wrt_IRtrig(trial_starts_in_question(ii));
+        		elseif strcmp(answer, 'Cancel')
+        			return
+    			end
+			end
+			% now, remove any camera trials starts not in range for CED
+
+			Camera_trialstarts_not_found_by_CED = (...
+				~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig)...
+			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+1)...
+			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+2)...
+			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-1)...
+			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-2));
+
+			obj.video.lampOFF.frames(Camera_trialstarts_not_found_by_CED) = [];
+
+
+			close(gcf);
+			disp('Corrected trial starts on camera...')
+			ax = obj.plotTrialStarts;
 		end
 		function getVideoLicks(obj)
 			% 
