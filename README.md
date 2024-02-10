@@ -15,5 +15,7 @@
 
  HSOM Dependencies (in dependencies folder):
  >makeStandardFigure.m
+>
  >correctPathOS.m
+>
  >prettyHxg.m
