@@ -357,7 +357,7 @@ classdef CLASS_video_lick_obj < handle
 			    % for each timepoint, plot the video frame and then overlay the keypoints
 			    for i_timepoint = 1:obj.currentVid.NumFrames
 			        frame = obj.getFrame(i_timepoint);
-			        Pixels = frame(obj.ROIs.lampOFF.x_ix, obj.ROIs.lick.y_ix);
+			        Pixels = frame(obj.ROIs.lampOFF.x_ix, obj.ROIs.lampOFF.y_ix);
 			        obj.video.lampOFF.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
 
 			        Pixels = frame(obj.ROIs.lick.x_ix, obj.ROIs.lick.y_ix);
