@@ -83,11 +83,11 @@ classdef CLASS_video_lick_obj < handle
         function save(obj, Revise)
             if nargin<2, Revise = false;end
         	retdir = pwd;
+        	cd(obj.iv.savepath)
         	if Revise
 				timestamp_now = datestr(now,'mm_dd_yy__HH_MM_AM');
 				savefilename = [obj.iv.name '_videoQCobj'];
 				obj.iv.savefilename = savefilename;
-				cd(obj.iv.savepath)
 			else
 				savefilename = obj.iv.savefilename;
 			end
