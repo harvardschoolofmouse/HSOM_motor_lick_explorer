@@ -11,9 +11,9 @@
 
  Dependencies:
  Matlab toolboxes:
-  Image Processing Toolbox
+ >Image Processing Toolbox
 
  HSOM Dependencies (in dependencies folder):
-  makeStandardFigure.m
-  correctPathOS.m
-  prettyHxg.m
+ >makeStandardFigure.m
+ >correctPathOS.m
+ >prettyHxg.m
