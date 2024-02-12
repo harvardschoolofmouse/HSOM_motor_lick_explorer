@@ -1,14 +1,16 @@
 classdef CLASS_video_lick_obj < handle
     % 
     %   Created     2/5/24 ahamilos
-    %   Modified    2/8/24 ahamilos | VERSION CODE: ['CLASS_video_lick_obj v1.1 Modified 2-8-24 20:00 | obj created: ' datestr(now)];
+    %   Modified    2/8/24 ahamilos | VERSION CODE: ['CLASS_video_lick_obj v1.2 Modified 2-8-24 20:00 | obj created: ' datestr(now)];
     % 
     % 	----------------------
     % 	Dependencies from harvardschoolofmouse libraries:
     % 		correctPathOS
     % 		makeStandardFigure
+    %       prettyHxg
     %
     %	Developed in Matlab 2023a on MacOS
+    %       Requires Image Processing Toolbox
     % 
     % 	----------------------
     %	File types:
