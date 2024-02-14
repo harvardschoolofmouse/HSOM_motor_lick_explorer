@@ -893,6 +893,10 @@ classdef CLASS_video_lick_obj < handle
 
 			if redo
 				CED_missed_trials = [];
+				obj.analysis.CED_missed_trials = [];
+				obj.analysis.video_missed_trials = [];
+				obj.analysis.groomingTrials = [];
+				obj.analysis.okTrials = [];
 				video_missed_trials = [];
 				groomingTrials = [];
 				okTrials = [];
