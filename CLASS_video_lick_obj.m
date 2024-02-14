@@ -61,6 +61,8 @@ classdef CLASS_video_lick_obj < handle
             disp(' => Detecting lick events...')
             LineROI = obj.setThreshold('lick');
             obj.save(false);
+            
+%% 
 
             disp(' => Initial alignment of video to CED...')
             obj.getVideoTrialStartFrames;
@@ -68,6 +70,7 @@ classdef CLASS_video_lick_obj < handle
             disp(' => Collecting user corrections to trial-start data...')
             obj.UIcleanUpTrialStarts;
             obj.save(false);
+          
             
             disp(' => Gathering lick data for comparisons...')
             obj.getVideoLicks;
@@ -577,9 +580,15 @@ classdef CLASS_video_lick_obj < handle
     		for ii = 1:numel(obj.CED.cue_s)
         		obj.CED.CamO_cue_frames_wrt_IRtrig(ii) = find(obj.CED.CamO_s_trim >= obj.CED.cue_s(ii), 1, 'first');
                 obj.CED.CamO_cue_s_wrt_IRtrig(ii) = obj.CED.CamO_s_trim(obj.CED.CamO_cue_frames_wrt_IRtrig(ii));
-    		end
-    		t = num2cell(obj.CED.CamO_s_trim(1:numel(obj.videomap))./60);
-			[obj.videomap.time_min] = t{:};
+            end
+            try
+	    		t = num2cell(obj.CED.CamO_s_trim(1:numel(obj.videomap))./60);
+            catch
+    			t = obj.CED.CamO_s_trim(1:end);
+                t(end+1:numel(obj.videomap)) = nan;
+                t = num2cell(t);
+            end
+            [obj.videomap.time_min] = t{:};
 		end
 		function ax = plotTrialStarts(obj)
 			%
@@ -634,6 +643,7 @@ classdef CLASS_video_lick_obj < handle
     			trial_starts_in_question = obj.QCvideoTrialStarts;
         	end
 		end
+       
         function [trial_starts_in_question, frames_starts_in_question] = QCvideoTrialStarts(obj)
 			% 
 			% 	Find any trial-starts in CED not matched by a camera trial start.
@@ -702,6 +712,7 @@ classdef CLASS_video_lick_obj < handle
 		end
 		function getVideoEventsInCEDsec(obj)
 			nframes = numel(obj.video.lampOFF.mean_pixels);
+			if nframes > numel(obj.CED.CamO_s_trim), nframes = numel(obj.CED.CamO_s_trim);end
 			obj.video.frames_s = obj.CED.CamO_s_trim(1:nframes);
 			obj.video.lampOFF.s = obj.video.frames_s(obj.video.lampOFF.frames);
 			obj.video.lick.s = obj.video.frames_s(obj.video.lick.frames);
@@ -768,7 +779,8 @@ classdef CLASS_video_lick_obj < handle
 			obj.plotraster(obj.video.lick_bt_wrtc_frames, obj.video.flickswrtc_frames, 'ax', ax(1), 'dispName', 'Video', 'markersize', 10, 'append', false, 'color', [0,1,0], 'referenceEventName', 'Cue');
 			obj.plotraster(obj.CED.lick_bt_wrtc_frames, obj.CED.flickswrtc_frames, 'ax', ax(1), 'dispName', 'CED CamO', 'markersize', 5, 'append', true, 'color', [0,0,0]);
             xlabel('Frames with respect to Cue')
-		end
+        end
+       
 		function plotLicksByTime(obj)
 			[f,ax] = makeStandardFigure;%(2, [1,2]);
 			obj.plotraster(obj.video.lick_bt_wrtc_s, obj.video.flickswrtc_s, 'ax', ax(1), 'dispName', 'Video', 'markersize', 10, 'append', false, 'color', [0,1,0], 'referenceEventName', 'Cue');
