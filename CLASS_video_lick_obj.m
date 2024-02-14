@@ -885,15 +885,27 @@ classdef CLASS_video_lick_obj < handle
 			obj.analysis.differences = differences;
 			obj.analysis.trials_to_examine = trials_to_examine;
 		end
-		function UIexamineLicking(obj,threshold_to_examine)
+		function UIexamineLicking(obj,threshold_to_examine, redo)
+			if nargin < 3, redo = false;end
 			if nargin < 2, threshold_to_examine = 0.1;end
 			disp([' ==> Examining differences in lick-time between CED/video, threshold difference = ' num2str(threshold_to_examine), 's'])
 			obj.findLickTimeDiscrepancies(threshold_to_examine);
 
-			CED_missed_trials = [];
-			video_missed_trials = [];
-			groomingTrials = [];
-			okTrials = [];
+			if redo
+				CED_missed_trials = [];
+				video_missed_trials = [];
+				groomingTrials = [];
+				okTrials = [];
+			else
+				CED_missed_trials = obj.analysis.CED_missed_trials;
+				video_missed_trials = obj.analysis.video_missed_trials;
+				groomingTrials = obj.analysis.groomingTrials;
+				okTrials = obj.analysis.okTrials;
+
+				alreadylabeled = [CED_missed_trials,video_missed_trials,groomingTrials,okTrials];
+				obj.analysis.trials_to_examine(ismember(obj.analysis.trials_to_examine, alreadylabeled)) = [];
+				warning('rbf')
+			end
 			for ii = 1:numel(obj.analysis.trials_to_examine)
 				trialNo = obj.analysis.trials_to_examine(ii);
 				% find out if CED or video missed
@@ -926,7 +938,12 @@ classdef CLASS_video_lick_obj < handle
 				t = ax2.Title.String;
 				t = sprintf([t, '\n', Str]);
                 title(ax2, t);
-				answer = questdlg('How should this trial be categorized?',['Suspect trial ' num2str(ii) '/' num2str(numel(obj.analysis.trials_to_examine))],...
+				% answer = questdlg('How should this trial be categorized?',['Suspect trial ' num2str(ii) '/' num2str(numel(obj.analysis.trials_to_examine))],...
+				% 	'Missed Lick (CED or Video)',...
+				% 	'Grooming',...
+				% 	'Ok',...
+				% 	'Grooming');
+				answer = NonmodalQuestdlg([ 0.6 , 0.1 ],'How should this trial be categorized?',['Suspect trial ' num2str(ii) '/' num2str(numel(obj.analysis.trials_to_examine))],...
 					'Missed Lick (CED or Video)',...
 					'Grooming',...
 					'Ok',...
@@ -934,13 +951,17 @@ classdef CLASS_video_lick_obj < handle
 				if strcmp(answer, 'Missed Lick (CED or Video)')
 					if obj.analysis.differences(trialNo) > 0
 						video_missed_trials(end+1) = trialNo;
+						obj.analysis.video_missed_trials(end+1) = trialNo;
 					else
 						CED_missed_trials(end+1) = trialNo;
+						obj.analysis.CED_missed_trials(end+1) = trialNo;
 					end
 				elseif strcmp(answer, 'Grooming')
 					groomingTrials(end+1) = trialNo;
+					obj.analysis.groomingTrials(end+1) = trialNo;
 				else
 					okTrials(end+1) = trialNo;
+					obj.analysis.okTrials(end+1) = trialNo;
 				end
 				close all
 			end
