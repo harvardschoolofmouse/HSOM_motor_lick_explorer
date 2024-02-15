@@ -693,6 +693,7 @@ classdef CLASS_video_lick_obj < handle
 
 			close(gcf);
 			disp('Corrected trial starts on camera...')
+            obj.video.lampOFF.frames=sort(obj.video.lampOFF.frames);
 			ax = obj.plotTrialStarts;
 		end
 		function getVideoLicks(obj)
