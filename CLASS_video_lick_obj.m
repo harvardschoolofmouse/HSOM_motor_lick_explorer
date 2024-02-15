@@ -929,7 +929,11 @@ classdef CLASS_video_lick_obj < handle
                 % frameNo_missedLick = obj.video.flickswrtc_frames(trialNo) + obj.CED.CamO_cue_frames_wrt_IRtrig(trialNo);
 
 				ax = obj.timeseriesROIcomparison(trialNo);
-                xlim(ax(1), [obj.video.lampOFF.frames(trialNo)-10, obj.CED.CamO_lampOn_frames_wrt_IRtrig(trialNo)+50])
+                try
+                    xlim(ax(1), [obj.video.lampOFF.frames(trialNo)-10, obj.CED.CamO_lampOn_frames_wrt_IRtrig(trialNo)+50])
+                catch
+                    warning('there''s an issue with ced/cam alignment')
+                end
 				f_ROI = gcf;
                 ax2 = obj.plot(frameNo_missedLick);
                 f_mus = gcf;
