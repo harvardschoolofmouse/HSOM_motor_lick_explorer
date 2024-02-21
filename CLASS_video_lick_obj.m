@@ -265,7 +265,7 @@ classdef CLASS_video_lick_obj < handle
             ylim(ax,[0, Height])
             hImage = image(frame,"Parent",ax);
             title(ax,['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
-            disp('Press ESC if the mouse is grooming. We can open a different frame')
+            disp('Press ESC if the mouse is grooming or to advance frame (if want to see Houselamp turn off). We can open a different frame')
             roi = [];
             while isempty(roi)
                 roi = drawrectangle(ax);
