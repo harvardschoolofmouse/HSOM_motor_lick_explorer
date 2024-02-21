@@ -265,16 +265,17 @@ classdef CLASS_video_lick_obj < handle
             ylim(ax,[0, Height])
             hImage = image(frame,"Parent",ax);
             title(ax,['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
-            disp('Close the window if the mouse is grooming. We can open a different frame')
+            disp('Press ESC if the mouse is grooming. We can open a different frame')
             roi = [];
             while isempty(roi)
-                try
-                    roi = drawrectangle(ax);
-                catch
+                roi = drawrectangle(ax);
+                if isempty(roi.Position)
                     vid = obj.currentVid.vid;
-			        frame = read(vid, i_timepoint+10);
+                    i_timepoint = i_timepoint+10;
+		            frame = read(vid, i_timepoint);
                     hImage = image(frame,"Parent",ax);
                     title(ax,['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
+                    roi = [];
                 end
             end
             pos = roi.Position;
