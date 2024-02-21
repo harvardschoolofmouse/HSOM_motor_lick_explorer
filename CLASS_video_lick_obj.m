@@ -141,7 +141,7 @@ classdef CLASS_video_lick_obj < handle
             strsplit(obj.iv.CEDfile, '\');
             n = strsplit(obj.iv.CEDfile, '\');
             if numel(n) == 1
-            n = strsplit(obj.iv.CEDfile, '/');
+                n = strsplit(obj.iv.CEDfile, '/');
             end
             n = n{end};
             n = strsplit(n, '.mat');
@@ -264,8 +264,19 @@ classdef CLASS_video_lick_obj < handle
 			xlim(ax,[0, Width])
             ylim(ax,[0, Height])
             hImage = image(frame,"Parent",ax);
-            title(['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
-            roi = drawrectangle(ax);
+            title(ax,['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
+            disp('Close the window if the mouse is grooming. We can open a different frame')
+            roi = [];
+            while isempty(roi)
+                try
+                    roi = drawrectangle(ax);
+                catch
+                    vid = obj.currentVid.vid;
+			        frame = read(vid, i_timepoint+10);
+                    hImage = image(frame,"Parent",ax);
+                    title(ax,['frame #: ' num2str(i_timepoint) ' | time: ' num2str((i_timepoint-1)*frameRate)])
+                end
+            end
             pos = roi.Position;
             x_ix = round(pos(2):pos(2)+pos(4));
             y_ix = round(pos(1):pos(1)+pos(3));
