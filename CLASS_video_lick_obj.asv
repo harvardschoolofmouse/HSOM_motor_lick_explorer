@@ -575,12 +575,8 @@ classdef CLASS_video_lick_obj < handle
             IRtrig_frame = find(obj.CED.CamO_s >= obj.CED.IRtrig_s, 1, 'first');
             obj.CED.IRtrig_frame = IRtrig_frame;
             % trim off the CED frames so that it matches the video
-            if IRtrig_frame-obj.video.IRtrig+1 <= 0
-                obj.CED.CamO_s = [nan(-1*(IRtrig_frame-obj.video.IRtrig),1); obj.CED.CamO_s];
-                IRtrig_frame = find(obj.CED.CamO_s >= obj.CED.IRtrig_s, 1, 'first');
-                obj.CED.IRtrig_frame = IRtrig_frame;
-            end
-            obj.CED.CamO_s_trim = obj.CED.CamO_s(IRtrig_frame-obj.video.IRtrig+1:end);
+            if IRtrig_frame-obj.video.IRtrig+1 > 0
+                obj.CED.CamO_s_trim = obj.CED.CamO_s(IRtrig_frame-obj.video.IRtrig+1:end);
             % get the timestamps
             for ii = 1:numel(obj.CED.lampOff_s)
             	obj.CED.CamO_trialStart_frames_wrt_IRtrig(ii) = find(obj.CED.CamO_s_trim >= obj.CED.lampOff_s(ii), 1, 'first');
