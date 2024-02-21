@@ -80,7 +80,7 @@ classdef CLASS_video_lick_obj < handle
             disp(' => All your data has been collected and saved. ')
             disp(' => Next, you should run: ')
             disp(' ')
-            disp('          obj.UIexamineLicking(0.1)')
+            disp('          obj.UIexamineLicking(0.15, true)')
             disp(' ')
             disp('^^(copy this and run it! You will curate licks)')
             disp('--------------------------- \finis')
