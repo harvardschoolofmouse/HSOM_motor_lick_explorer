@@ -1008,7 +1008,7 @@ classdef CLASS_video_lick_obj < handle
 			obj.analysis.video_missed_trials = video_missed_trials;
 			obj.analysis.groomingTrials = groomingTrials;
 			obj.analysis.OK_Trials = OK_Trials;
-			
+			obj.save(false)
 		end
 	end
 end
