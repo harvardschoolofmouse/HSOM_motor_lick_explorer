@@ -37,7 +37,8 @@ classdef CLASS_video_lick_obj < handle
     %       Methods: Initialization
     %-------------------------------------------------------
     methods
-        function obj = CLASS_video_lick_obj()
+        function obj = CLASS_video_lick_obj(useCueROI)
+        	if nargin < 2, useCueROI = false;end
             % 
             disp('-----------------------------------')
             disp(' => Collecting data from file...')
@@ -49,28 +50,37 @@ classdef CLASS_video_lick_obj < handle
             obj.save(true);
             disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
 
-            disp(' => Get all ROIs for lampOff and lick')
-            obj.setAllROIs
-            obj.detectMultiEvents;
-            obj.save(false);
-            disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
-            
-            disp(' => Detecting trial-start events...')
-            LineROI = obj.setThreshold('lampOFF');
-            
-            disp(' => Detecting lick events...')
-            LineROI = obj.setThreshold('lick');
-            obj.save(false);
-            
-%% 
-
-            disp(' => Initial alignment of video to CED...')
+            if useCueROI
+				disp(' => Get all ROIs for cue and lick')
+	            obj.detectCue;
+	            obj.detectLicks;
+	            obj.save(false);
+	            disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
+	            
+	            disp(' => Detecting trial-start events...')
+	            LineROI = obj.setThreshold('cue');
+	            disp(' => Detecting lick events...')
+            	LineROI = obj.setThreshold('lick');
+            	disp(' => Initial alignment of video to CED...')
+            	obj.iv.CUEtriggered = true;
+        	else
+	            disp(' => Get all ROIs for lampOff and lick')
+	            obj.setAllROIs
+	            obj.detectMultiEvents;
+	            obj.save(false);
+	            disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
+	            
+	            disp(' => Detecting trial-start events...')
+	            LineROI = obj.setThreshold('lampOFF');
+	            disp(' => Detecting lick events...')
+            	LineROI = obj.setThreshold('lick');
+            	disp(' => Initial alignment of video to CED...')
+            end
             obj.getVideoTrialStartFrames;
             obj.alignCED_to_video;
             disp(' => Collecting user corrections to trial-start data...')
             obj.UIcleanUpTrialStarts;
             obj.save(false);
-          
             
             disp(' => Gathering lick data for comparisons...')
             obj.getVideoLicks;
@@ -160,6 +170,7 @@ classdef CLASS_video_lick_obj < handle
         function getIV(obj)
         	obj.iv.versionCode = 'CLASS_video_lick_obj v1.1 Modified 2-8-24 20:00';
         	obj.iv.zoom = 2.5;
+            obj.iv.trialsAligned = false;
     	end
     	function progressBar(obj, iter, total, nested, cutter)
 			if nargin < 5
@@ -549,37 +560,87 @@ classdef CLASS_video_lick_obj < handle
 			ROIfield.threshold = threshold;
 			obj.updateROIfieldROI(Style, ROIfield);
         end
+        function LineROI = setThresholdHistogram(obj, Style, LineROI)
+			% 
+			% 	Plots meanPixels for the style and allows user to get line ROI where thresh should be
+			% 
+			if nargin < 2, Style = 'LICK';end
+			if strcmpi(Style, 'lick')
+				data = obj.video.lick.mean_pixels;
+			elseif strcmpi(Style, 'cue')
+				data = obj.video.cue.mean_pixels;
+			else
+				data = obj.video.lampOFF.mean_pixels;
+			end
+			if nargin < 3
+				% if we don't specify the thresholdROI, we should get new
+                [f,ax] = makeStandardFigure;
+				h = prettyHxg(ax, data, Style, [1,0,0], [], 500, 'probability');
+				disp('||| -- Draw threshold line')
+				LineROI = drawline(ax);
+			end
+			% if we already have LineROI, adjust it, then feed it 
+			% back to the function to update the ROI field
+			threshold = mean(LineROI.Position(:,1));
+			ROIfield = obj.getROIfieldnameROI(Style);
+			ROIfield.threshold = threshold;
+			obj.updateROIfieldROI(Style, ROIfield);
+        end
         
 		function getVideoTrialStartFrames(obj)
 			% 
 			% 	Once we have set a threshold in LampOff ROI field, we can assign trial start events
 			% 
-			threshold = obj.ROIs.lampOFF.threshold;
-			lampOff_logic = obj.video.lampOFF.mean_pixels < threshold;
-            all_transitions = (lampOff_logic(2:end) -  lampOff_logic(1:end-1));
-            down_transitions = all_transitions ==1;
-            neighbor_up_transitions =  [all_transitions(2:end)==-1; 0] | [0; all_transitions(1:end-1)==-1];
-			transitions = find(down_transitions & ~neighbor_up_transitions) + 1;
-			ax = obj.plotMeanPixels('lampOFF');
-			xx = get(ax, 'xlim');
-			plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
-			plot(ax, transitions, threshold.*ones(size(transitions)), 'g.', 'linewidth', 10)
-            obj.video.lampOFF.frames = transitions;
-            obj.video.IRtrig = obj.video.lampOFF.frames(1);
+            if ~isfield(obj.iv, 'CUEtriggered')
+			    threshold = obj.ROIs.lampOFF.threshold;
+			    lampOff_logic = obj.video.lampOFF.mean_pixels < threshold;
+                all_transitions = (lampOff_logic(2:end) -  lampOff_logic(1:end-1));
+                down_transitions = all_transitions ==1;
+                neighbor_up_transitions =  [all_transitions(2:end)==-1; 0] | [0; all_transitions(1:end-1)==-1];
+			    transitions = find(down_transitions & ~neighbor_up_transitions) + 1;
+			    ax = obj.plotMeanPixels('lampOFF');
+			    xx = get(ax, 'xlim');
+			    plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
+			    plot(ax, transitions, threshold.*ones(size(transitions)), 'g.', 'linewidth', 10)
+                obj.video.lampOFF.frames = transitions;
+                obj.video.IRtrig = obj.video.lampOFF.frames(1);
+            else
+                threshold = obj.ROIs.cue.threshold;
+			    lampOff_logic = obj.video.cue.mean_pixels > threshold;
+                all_transitions = (lampOff_logic(2:end) -  lampOff_logic(1:end-1));
+                up_transitions = all_transitions ==1;
+                neighbor_up_transitions =  [all_transitions(2:end)==1; 0] | [0; all_transitions(1:end-1)==1];
+			    transitions = find(up_transitions) + 1;
+			    ax = obj.plotMeanPixels('cue');
+			    xx = get(ax, 'xlim');
+			    plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
+			    plot(ax, transitions, threshold.*ones(size(transitions)), 'g.', 'linewidth', 10)
+                obj.video.cue.frames = transitions;
+            end
 		end
 		function alignCED_to_video(obj)
 			% 
             % need to get CamO nearest to CED lampOff_frames
             %
-            
-            IRtrig_frame = find(obj.CED.CamO_s >= obj.CED.IRtrig_s, 1, 'first');
-            obj.CED.IRtrig_frame = IRtrig_frame;
-            % trim off the CED frames so that it matches the video
+            if isfield(obj.video,'lampOFF')
+	            IRtrig_frame = find(obj.CED.CamO_s >= obj.CED.IRtrig_s, 1, 'first');
+	            obj.CED.IRtrig_frame = IRtrig_frame;
+            else
+            	IRtrigframeCED = find(obj.CED.CamO_s>=obj.CED.IRtrig_s,1,'first');
+            	firstCueframeCED = find(obj.CED.CamO_s>=obj.CED.cue_s(1),1,'first');
+            	delIRtrig = firstCueframeCED - IRtrigframeCED;
+            	obj.video.IRtrig = obj.video.cue.frames(1) - delIRtrig;
+            	warning('we''re aligning to the cue')
+	            obj.CED.IRtrig_frame = IRtrigframeCED;
+                IRtrig_frame = IRtrigframeCED;
+        	end
+        	% trim off the CED frames so that it matches the video
             if IRtrig_frame-obj.video.IRtrig+1 <= 0
                 obj.CED.CamO_s = [nan(-1*(IRtrig_frame-obj.video.IRtrig),1); obj.CED.CamO_s];
                 IRtrig_frame = find(obj.CED.CamO_s >= obj.CED.IRtrig_s, 1, 'first');
                 obj.CED.IRtrig_frame = IRtrig_frame;
             end
+        
             obj.CED.CamO_s_trim = obj.CED.CamO_s(IRtrig_frame-obj.video.IRtrig+1:end);
             % get the timestamps
             for ii = 1:numel(obj.CED.lampOff_s)
@@ -607,21 +668,36 @@ classdef CLASS_video_lick_obj < handle
             end
             [obj.videomap.time_min] = t{:};
 		end
-		function ax = plotTrialStarts(obj)
+		function ax = plotTrialStarts(obj, ax)
 			%
 			%	must run alignCED_to_video and getVideoTrialStartFrames first
 			%
-			threshold = obj.ROIs.lampOFF.threshold;
-			ax = obj.plotMeanPixels('lampOFF');
-			xx = get(ax, 'xlim');
-			% plot the video-found events
-			plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
-			plot(ax, obj.video.IRtrig, threshold, 'r.', 'markersize', 30, 'displayname', 'IRtrig-video')
-			plot(ax, obj.video.lampOFF.frames, threshold.*ones(size(obj.video.lampOFF.frames)), 'r.', 'markersize', 10, 'displayname', 'LampOff-video')
-			
+			if nargin < 2, ax=[];end
+			if ~isfield(obj.iv, 'CUEtriggered')
+				threshold = obj.ROIs.lampOFF.threshold;
+				ax = obj.plotMeanPixels('lampOFF', ax);
+				xx = get(ax, 'xlim');
+				% plot the video-found events
+				plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
+				plot(ax, obj.video.IRtrig, threshold, 'r.', 'markersize', 30, 'displayname', 'IRtrig-video')
+				plot(ax, obj.video.lampOFF.frames, threshold.*ones(size(obj.video.lampOFF.frames)), 'r.', 'markersize', 10, 'displayname', 'LampOff-video')
+				
 
-			% plot the CED-found events
-			plot(ax, obj.CED.CamO_trialStart_frames_wrt_IRtrig, threshold.*ones(size(obj.CED.CamO_trialStart_frames_wrt_IRtrig)), 'bo', 'markersize', 10, 'displayname', 'LampOff-CED')
+				% plot the CED-found events
+				plot(ax, obj.CED.CamO_trialStart_frames_wrt_IRtrig, threshold.*ones(size(obj.CED.CamO_trialStart_frames_wrt_IRtrig)), 'bo', 'markersize', 10, 'displayname', 'LampOff-CED')
+			else
+				threshold = obj.ROIs.cue.threshold;
+				ax = obj.plotMeanPixels('cue', ax);
+				xx = get(ax, 'xlim');
+				% plot the video-found events
+				plot(ax, [1, xx(2)], [threshold, threshold], 'r--')
+				plot(ax, obj.ROIs.cue.threshold, 'r.', 'markersize', 30, 'displayname', 'Cue-video')
+				plot(ax, obj.video.cue.frames, threshold.*ones(size(obj.video.cue.frames)), 'r.', 'markersize', 10, 'displayname', 'Cue-video')
+				
+
+				% plot the CED-found events
+				plot(ax, obj.CED.CamO_cue_frames_wrt_IRtrig, threshold.*ones(size(obj.CED.CamO_cue_frames_wrt_IRtrig)), 'bo', 'markersize', 10, 'displayname', 'Cue-CED')
+			end
 			
 
 			title(ax, 'video = r. | CED = bo')
@@ -661,57 +737,298 @@ classdef CLASS_video_lick_obj < handle
         	end
 		end
        
-        function [trial_starts_in_question, frames_starts_in_question] = QCvideoTrialStarts(obj)
+        function [trial_starts_in_question, frames_starts_in_question] = QCvideoTrialStarts(obj, useIRtrig)
 			% 
 			% 	Find any trial-starts in CED not matched by a camera trial start.
 			% 
-			CEDtrialstarts_not_found_by_camera = find(...
-				~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames)...
-			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+1)...
-			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+2)...
-			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-1)...
-			 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-2));
-            frames_starts_in_question = obj.CED.CamO_trialStart_frames_wrt_IRtrig(CEDtrialstarts_not_found_by_camera);
-			% CEDtrialstarts_not_found_by_camera = find(~ismembertol(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames, 1));
+			if nargin<2, useIRtrig = true;end
+			if useIRtrig
+				CEDtrialstarts_not_found_by_camera = find(...
+					~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames)...
+				 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+1)...
+				 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames+2)...
+				 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-1)...
+				 & ~ismember(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames-2));
+	            frames_starts_in_question = obj.CED.CamO_trialStart_frames_wrt_IRtrig(CEDtrialstarts_not_found_by_camera);
+				% CEDtrialstarts_not_found_by_camera = find(~ismembertol(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames, 1));
+			else
+				CEDtrialstarts_not_found_by_camera = find(...
+					~ismember(obj.CED.CamO_cue_frames_wrt_IRtrig, obj.video.cue.frames)...
+				 & ~ismember(obj.CED.CamO_cue_frames_wrt_IRtrig, obj.video.cue.frames+1)...
+				 & ~ismember(obj.CED.CamO_cue_frames_wrt_IRtrig, obj.video.cue.frames+2)...
+				 & ~ismember(obj.CED.CamO_cue_frames_wrt_IRtrig, obj.video.cue.frames-1)...
+				 & ~ismember(obj.CED.CamO_cue_frames_wrt_IRtrig, obj.video.cue.frames-2));
+	            frames_starts_in_question = obj.CED.CamO_cue_frames_wrt_IRtrig(CEDtrialstarts_not_found_by_camera);
+				% CEDtrialstarts_not_found_by_camera = find(~ismembertol(obj.CED.CamO_trialStart_frames_wrt_IRtrig, obj.video.lampOFF.frames, 1));
+			end
 			trial_starts_in_question = CEDtrialstarts_not_found_by_camera;
 		end
-		function UIcleanUpTrialStarts(obj)
+		function shiftFrame(obj, CEDframe, VideoFrame, trialNo)
+			% 
+			% 	The goal here is to backfill frames to all video fields such that the 
+			%	video frame specified is now the same as the CEDframe specified
+			%
+			%	We will establish that anything happening after the og videoframe is now BLIND
+			%	and leading up to the new videoframe=CEDframe is blind
+			% 
+			
+			warning('drop a pause sign here so that we can check the video frame we want to correct to')
+			% 
+			% 	start with the difference between the two frames
+			% 
+			n_missed_frames = CEDframe - VideoFrame;
+			if ~isfield(obj.iv, 'frameshift')
+				obj.iv.frameshift(1).trialNo = trialNo;
+				obj.iv.frameshift(1).n_missed_frames = n_missed_frames;
+				firstShift = true;
+			else
+				obj.iv.frameshift(end+1).trialNo = trialNo;
+				obj.iv.frameshift(end).n_missed_frames = n_missed_frames;
+				firstShift = false;
+			end
+			if n_missed_frames <=0, error('there are more video frames than CED frames? This can''t be possible.'), end
+			%
+			%
+			%   go through the video struct and increment all values > video_frame by this difference
+			%
+			if firstShift
+				obj.analysis.video.lick.og_mean_pixels = obj.video.lick.mean_pixels;
+				if isfield(obj.video, 'cue')
+					obj.analysis.video.cue.og_mean_pixels = obj.video.cue.mean_pixels;
+					obj.analysis.video.cue.og_frames = obj.video.cue.frames;
+				end
+				if isfield(obj.video, 'lampOFF')
+					obj.analysis.video.lampOFF.og_mean_pixels = obj.video.lampOFF.mean_pixels;
+					obj.analysis.video.lampOFF.og_frames = obj.video.lampOFF.frames;
+				end
+
+				obj.analysis.videomap.og_time_min = [obj.videomap.time_min];
+			end
+			obj.video.lick.mean_pixels = [obj.video.lick.mean_pixels(1:VideoFrame-1); nan(n_missed_frames,1); obj.video.lick.mean_pixels(VideoFrame:end)];
+			if isfield(obj.video, 'cue')
+				obj.video.cue.mean_pixels = [obj.video.cue.mean_pixels(1:VideoFrame-1); nan(n_missed_frames,1); obj.video.cue.mean_pixels(VideoFrame:end)];
+				obj.video.cue.frames(obj.video.cue.frames>=VideoFrame) = obj.video.cue.frames(obj.video.cue.frames>=VideoFrame) + n_missed_frames;
+			end
+			if isfield(obj.video, 'lampOFF')
+				obj.video.lampOFF.mean_pixels = [obj.video.lampOFF.mean_pixels(1:VideoFrame-1); nan(n_missed_frames,1); obj.video.lampOFF.mean_pixels(VideoFrame:end)];
+				obj.video.lampOFF.frames(obj.video.lampOFF.frames>=VideoFrame) = obj.video.lampOFF.frames(obj.video.lampOFF.frames>=VideoFrame) + n_missed_frames;
+			end
+			%
+			%
+			%	also need to increment timestamps from here forward to match. 
+			%	CEDframe should correspond to CamO_s at that index. 
+			%	So we should be able to update the times in the videomap with this
+			%
+			
+			[obj.videomap(VideoFrame+1:end).time_min] = deal(nan);
+			if numel(obj.CED.CamO_s_trim(CEDframe:end)) < numel(obj.videomap) - VideoFrame
+                temp = num2cell(obj.CED.CamO_s_trim(CEDframe:end));
+				[obj.videomap(VideoFrame+1:VideoFrame+numel(temp)).time_min] = temp{:};
+            else
+                warning('rbf')
+                temp = num2cell(obj.CED.CamO_s_trim(CEDframe:CEDframe+numel(obj.videomap)-CEDframe));
+				[obj.videomap(VideoFrame+1:end).time_min] = temp;
+			end
+
+			%
+
+		end
+		function detectFrameShift(obj, Style)
+			% 
+			% 	We will check the timestamps of cue or lamp off events against CED
+			% 
+			if strcmpi(Style, 'lampOFF')
+                lampOff_CED_frames = obj.CED.CamO_trialStart_frames_wrt_IRtrig;
+                lampOff_video_frames = obj.video.lampOFF.frames;
+				Event_CED = lampOff_CED_frames;
+				Event_video = lampOff_video_frames;
+			elseif strcmpi(Style, 'cue')
+				cue_CED_frames = obj.CED.CamO_cue_frames_wrt_IRtrig;
+                cue_video_frames = obj.video.cue.frames;
+                Event_CED = cue_CED_frames;
+				Event_video = cue_video_frames;
+			end
+
+			for itrial = 1:numel(obj.CED.lampOff_s)
+				% find the nearest video event to the CED event
+				video_event_this_trial(itrial) = Event_video(find(Event_video <= Event_CED(itrial) + 2, 1, 'last'));
+				ced_event_this_trial(itrial) = Event_CED(itrial);
+			end
+			obj.analysis.event_discrepancy = ced_event_this_trial-video_event_this_trial;
+			obj.analysis.video_event_this_trial = video_event_this_trial;
+			obj.analysis.ced_event_this_trial = ced_event_this_trial;
+		end
+		function UIcleanUpTrialStarts(obj, revise)
 			% ask user to clean up the data by presenting it as figs and
             % asking for a decision
             %
             % start by getting disagreements:
-            [trial_starts_in_question,frames_starts_in_question] = obj.QCvideoTrialStarts;
-            ax = obj.plotTrialStarts;
-        	disp(['Uh oh! we have ' num2str(numel(trial_starts_in_question)) ' discrepancies with CED'])
-        	% show bad trials till we reject
-        	for ii = 1:numel(trial_starts_in_question)
-            	xlim(ax, [frames_starts_in_question(ii)-70,frames_starts_in_question(ii)+70])
-                yy = get(ax, 'ylim');
-                plot(ax, [frames_starts_in_question(ii), frames_starts_in_question(ii)],yy, 'r--')
-            	% use the CED timestamp?
-            	answer = questdlg('Use CED timestamp for this trial?');
-            	if strcmp(answer, 'Yes')
-            		obj.video.lampOFF.frames(end+1) = obj.CED.CamO_trialStart_frames_wrt_IRtrig(trial_starts_in_question(ii));
-        		elseif strcmp(answer, 'Cancel')
-        			return
-    			end
-			end
-			% now, remove any camera trials starts not in range for CED
+            if nargin < 2, revise = false;end
+            if revise
+                if isfield(obj.ROIs,'lampOFF')
+	                obj.detectFrameShift('lampoff');
+                else
+            	    obj.detectFrameShift('cue');
+                end
+            end
+            [~,ax] = makeStandardFigure(2,[2,1]);
+            ax(1) = obj.plotTrialStarts(ax(1));
+            ax(2) = obj.plotTrialStarts(ax(2));
+            % find any trials with more than 2 discrepancy
+            trials_to_examine = find(obj.analysis.event_discrepancy > 2 | obj.analysis.event_discrepancy < -2);
+	        disp(['Uh oh! we have ' num2str(numel(trials_to_examine)) ' discrepancies with CED'])
+	        
+	        while numel(trials_to_examine) > 0
+	        	trialNo = trials_to_examine(1);
+	        	title(ax(1), ['video judgment: trial ' num2str(trialNo) ' video frame:' num2str(obj.analysis.video_event_this_trial(trialNo))])
+    	        xlim(ax(1), [obj.analysis.video_event_this_trial(trialNo)-70,obj.analysis.video_event_this_trial(trialNo)+70])
+                yy = get(ax(1), 'ylim');
+                plot(ax(1), [obj.analysis.video_event_this_trial(trialNo), obj.analysis.video_event_this_trial(trialNo)],yy, 'r--', 'displayname', 'CED')
 
-			Camera_trialstarts_not_found_by_CED = (...
-				~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig)...
-			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+1)...
-			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+2)...
-			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-1)...
-			 & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-2));
+                title(ax(2), ['CED judgment: trial ' num2str(trialNo) ' CED frame:' num2str(obj.analysis.ced_event_this_trial(trialNo))])
+    	        xlim(ax(2), [obj.analysis.ced_event_this_trial(trialNo)-70,obj.analysis.ced_event_this_trial(trialNo)+70])
+                yy = get(ax(2), 'ylim');
+                plot(ax(2), [obj.analysis.ced_event_this_trial(trialNo), obj.analysis.ced_event_this_trial(trialNo)],yy, 'r--', 'displayname', 'CED')
 
-			obj.video.lampOFF.frames(Camera_trialstarts_not_found_by_CED) = [];
+    	        % use the CED timestamp?
+    	        answer = questdlg(sprintf('Y=use CED timestamp this trial\nN=correct frameshift\nCancel to break out'));
+    	        if strcmp(answer, 'Yes')
+    		        obj.analysis.video_event_this_trial(trialNo) = obj.analysis.ced_event_this_trial(trialNo);
+    		        obj.analysis.event_discrepancy = obj.analysis.ced_event_this_trial-obj.analysis.video_event_this_trial;
+    		        trials_to_examine = find(obj.analysis.event_discrepancy > 2 | obj.analysis.event_discrepancy < -2);
+		        elseif strcmp(answer, 'No')
+		        	obj.shiftFrame(obj.analysis.ced_event_this_trial(trialNo), obj.analysis.video_event_this_trial(trialNo),trialNo);
+		        	if isfield(obj.ROIs,'lampOFF')
+			            obj.analysis.video.lampOFF.og_frames = obj.video.lampOFF.frames;
+			            obj.video.lampOFF.frames = [obj.video.lampOFF.frames;obj.analysis.video_event_this_trial'];
+		            else
+		            	obj.analysis.video.cue.og_frames = obj.video.cue.frames;
+		            	obj.video.cue.frames = [obj.video.cue.frames;obj.analysis.video_event_this_trial'];
+		        	end
+		        	
+		        	if isfield(obj.ROIs,'lampOFF')
+                        obj.video.lampOFF.frames = sort(unique(obj.video.lampOFF.frames));
+		                obj.detectFrameShift('lampoff');
+                    else
+                        obj.video.cue.frames = sort(unique(obj.video.cue.frames));
+	            	    obj.detectFrameShift('cue');
+	                end
 
+		        elseif strcmp(answer, 'Cancel')
+			        return
+		        end
+	        end
+	        % now, remove any camera trials starts not in range for CED
 
-			close(gcf);
-			disp('Corrected trial starts on camera...')
-            obj.video.lampOFF.frames=sort(obj.video.lampOFF.frames);
-			ax = obj.plotTrialStarts;
+	        if isfield(obj.ROIs,'lampOFF')
+	            obj.analysis.video.lampOff.og_frames = obj.video.lampOFF.frames;
+	        	obj.video.lampOFF.frames = obj.analysis.video_event_this_trial;
+            else
+            	obj.analysis.video.cue.og_frame = obj.video.cue.frames;
+	        	obj.video.cue.frames = obj.analysis.video_event_this_trial;
+	        	obj.video.lampOFF.frames = obj.video.cue.frames - (obj.CED.CamO_cue_frames_wrt_IRtrig - obj.CED.CamO_trialStart_frames_wrt_IRtrig)+1;
+        	end
+	        
+		    ax = obj.plotTrialStarts;
+            
+            obj.iv.trialsAligned=true;
+		end
+
+		function UIcleanUpTrialStartsold2(obj, acceptAll)
+			% ask user to clean up the data by presenting it as figs and
+            % asking for a decision
+            %
+            if nargin < 2, acceptAll = false;end
+            
+            if ~isfield(obj.iv, 'CUEtriggered')
+                if acceptAll
+                    obj.video.lampOFF.frames(1) = obj.video.IRtrig;
+                    obj.video.lampOFF.frames(2:numel(obj.CED.CamO_trialStart_frames_wrt_IRtrig(2:end))+1) = obj.CED.CamO_trialStart_frames_wrt_IRtrig(2:end);
+                else
+                    % start by getting disagreements:
+                    [trial_starts_in_question,frames_starts_in_question] = obj.QCvideoTrialStarts;
+                    ax = obj.plotTrialStarts;
+        	        disp(['Uh oh! we have ' num2str(numel(trial_starts_in_question)) ' discrepancies with CED'])
+        	        % show bad trials till we reject
+        	        for ii = 1:numel(trial_starts_in_question)
+            	        xlim(ax, [frames_starts_in_question(ii)-70,frames_starts_in_question(ii)+70])
+                        yy = get(ax, 'ylim');
+                        plot(ax, [frames_starts_in_question(ii), frames_starts_in_question(ii)],yy, 'r--')
+            	        % use the CED timestamp?
+            	        answer = questdlg('Y=use CED timestamp; N=correct frameshift; Cancel to break out');
+            	        if strcmp(answer, 'Yes')
+            		        obj.video.lampOFF.frames(end+1) = obj.CED.CamO_trialStart_frames_wrt_IRtrig(trial_starts_in_question(ii));
+        		        elseif strcmp(answer, 'No')
+        		        	% we will update the video field and break out of the function entirely
+        		        	CEDframe_thisTrialStart = obj.CED.CamO_trialStart_frames_wrt_IRtrig(trial_starts_in_question(ii));
+        		        	% find the breakpoint
+        		        	VideoFrame_thisTrialStart = obj.video.lampOFF.frames(find(obj.video.lampOFF.frames<CEDframe_thisTrialStart, 1, 'last'));
+        		        	obj.shiftFrame(CEDframe, VideoFrame);
+        		        	disp(['shifted the video fields to account for ' num2str(CEDframe-VideoFrame) 'missed frames. Rerun obj.UIcleanUpTrialStarts to resume.'])
+        		        	return
+        		        elseif strcmp(answer, 'Cancel')
+        			        return
+    			        end
+			        end
+			        % now, remove any camera trials starts not in range for CED
+    
+			        Camera_trialstarts_not_found_by_CED = (...
+				        ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig)...
+			         & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+1)...
+			         & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig+2)...
+			         & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-1)...
+			         & ~ismember(obj.video.lampOFF.frames, obj.CED.CamO_trialStart_frames_wrt_IRtrig-2));
+    
+			        obj.video.lampOFF.frames(Camera_trialstarts_not_found_by_CED) = [];
+    
+    
+			        close(gcf);
+			        disp('Corrected trial starts on camera...')
+                    obj.video.lampOFF.frames=sort(obj.video.lampOFF.frames);
+                end
+			    ax = obj.plotTrialStarts;
+            else
+                if acceptAll
+                    obj.video.cue.frames(1) = obj.video.IRtrig;
+                    obj.video.cue.frames(2:numel(obj.CED.CamO_cue_frames_wrt_IRtrig(2:end))+1) = obj.CED.CamO_cue_frames_wrt_IRtrig(2:end);
+                else
+			        warning('using the cue to align')
+			        % start by getting disagreements:
+                    [trial_starts_in_question,frames_starts_in_question] = obj.QCvideoTrialStarts(false);
+                    ax = obj.plotTrialStarts;
+        	        disp(['Uh oh! we have ' num2str(numel(trial_starts_in_question)) ' discrepancies with CED'])
+        	        % show bad trials till we reject
+        	        for ii = 1:numel(trial_starts_in_question)
+            	        xlim(ax, [frames_starts_in_question(ii)-70,frames_starts_in_question(ii)+70])
+                        yy = get(ax, 'ylim');
+                        plot(ax, [frames_starts_in_question(ii), frames_starts_in_question(ii)],yy, 'r--')
+            	        % use the CED timestamp?
+            	        answer = questdlg('Use CED timestamp for this trial?');
+            	        if strcmp(answer, 'Yes')
+            		        obj.video.cue.frames(end+1) = obj.CED.CamO_cue_frames_wrt_IRtrig(trial_starts_in_question(ii));
+        		        elseif strcmp(answer, 'Cancel')
+        			        return
+    			        end
+			        end
+			        % now, remove any camera trials starts not in range for CED
+    
+			        Camera_trialstarts_not_found_by_CED = (...
+				        ~ismember(obj.video.cue.frames, obj.CED.CamO_cue_frames_wrt_IRtrig)...
+			         & ~ismember(obj.video.cue.frames, obj.CED.CamO_cue_frames_wrt_IRtrig+1)...
+			         & ~ismember(obj.video.cue.frames, obj.CED.CamO_cue_frames_wrt_IRtrig+2)...
+			         & ~ismember(obj.video.cue.frames, obj.CED.CamO_cue_frames_wrt_IRtrig-1)...
+			         & ~ismember(obj.video.cue.frames, obj.CED.CamO_cue_frames_wrt_IRtrig-2));
+    
+			        obj.video.cue.frames(Camera_trialstarts_not_found_by_CED) = [];
+    
+    
+			        close(gcf);
+			        disp('Corrected trial starts on camera...')
+                    obj.video.cue.frames=sort(obj.video.cue.frames);
+                end
+			    ax = obj.plotTrialStarts;
+            end
+            obj.iv.trialsAligned=true;
 		end
 		function getVideoLicks(obj)
 			% 
@@ -729,10 +1046,18 @@ classdef CLASS_video_lick_obj < handle
             obj.video.lick.frames = transitions+1;
 		end
 		function getVideoEventsInCEDsec(obj)
-			nframes = numel(obj.video.lampOFF.mean_pixels);
+            if isfield(obj.video.lampOFF, 'mean_pixels')
+    			nframes = numel(obj.video.lampOFF.mean_pixels);
+            else
+                nframes = numel(obj.video.cue.mean_pixels);
+            end
 			if nframes > numel(obj.CED.CamO_s_trim), nframes = numel(obj.CED.CamO_s_trim);end
 			obj.video.frames_s = obj.CED.CamO_s_trim(1:nframes);
-			obj.video.lampOFF.s = obj.video.frames_s(obj.video.lampOFF.frames);
+            if isfield(obj.video.lampOFF, 'mean_pixels')
+			    obj.video.lampOFF.s = obj.video.frames_s(obj.video.lampOFF.frames);
+            else
+                obj.video.lampOFF.s = obj.CED.CamO_trialStart_frames_wrt_IRtrig;
+            end
 			obj.video.lick.s = obj.video.frames_s(obj.video.lick.frames);
 		end
 		function gatherLicks(obj)
@@ -742,7 +1067,7 @@ classdef CLASS_video_lick_obj < handle
 			% 
 			% 	we will attempt to identify all first-licks that are in agreement with CED and video
 			% 
-			if ~isempty(QCvideoTrialStarts(obj)), error('you must first QC the trial times with obj.UIcleanUpTrialStarts'), end
+			if ~obj.iv.trialsAligned && ~isempty(QCvideoTrialStarts(obj)), error('you must first QC the trial times with obj.UIcleanUpTrialStarts'), end
 			% 
 			% 	Start by getting flickswrtc for CED and video
 			% 
@@ -803,6 +1128,12 @@ classdef CLASS_video_lick_obj < handle
 			[f,ax] = makeStandardFigure;%(2, [1,2]);
 			obj.plotraster(obj.video.lick_bt_wrtc_s, obj.video.flickswrtc_s, 'ax', ax(1), 'dispName', 'Video', 'markersize', 10, 'append', false, 'color', [0,1,0], 'referenceEventName', 'Cue');
 			obj.plotraster(obj.CED.lick_bt_wrtc_s, obj.CED.flickswrtc_s, 'ax', ax(1), 'dispName', 'CED CamO', 'markersize', 5, 'append', true, 'color', [0,0,0]);
+			if isfield(obj.iv,'frameshift')
+				xx = get(ax, 'xlim');
+				for ii = 1:numel(obj.iv.frameshift)
+					plot(ax, xx, [obj.iv.frameshift(ii).trialNo,obj.iv.frameshift(ii).trialNo], 'r--', 'displayname', ['frameshift | n=' num2str(obj.iv.frameshift(ii).n_missed_frames)])
+				end
+			end
 		end
         function ax = plotraster(obj, spikes_wrt_event, first_spike_wrt_event, varargin)
             p = inputParser;
@@ -854,24 +1185,35 @@ classdef CLASS_video_lick_obj < handle
             ylabel(ax,[ReferenceEventName, ' #'])
             xlabel(ax,['Time (s) wrt ' ReferenceEventName])
         end
-        function ax = timeseriesROIcomparison(obj, trialNo, ax)
+        function [ax,CED1st, Video1st] = timeseriesROIcomparison(obj, trialNo, ax)
         	% 
         	% 	Use this to look for issues between CED/video on individual trials
         	% 
         	% get the fame of the lampOff event for this trial
         	frame_LO = obj.video.lampOFF.frames(trialNo);
-        	frame_cue = obj.CED.CamO_cue_frames_wrt_IRtrig(trialNo);
-        	if nargin < 3, [f,ax] = makeStandardFigure(2, [2,1]);set(f, 'position', [ 0    0.4456    0.5583    0.4667]);end
+        	if ~isfield(obj.video,'cue')
+	        	frame_cue = obj.CED.CamO_cue_frames_wrt_IRtrig(trialNo);
+        	else
+        		frame_cue = obj.video.cue.frames(trialNo);
+    		end
+        	if nargin < 3, [f,ax] = makeStandardFigure(2, [2,1]);set(f, 'units', 'normalized', 'position', [ 0    0.4456    0.5583    0.4667]);end
         	Limits = max([1,frame_LO-50-600]): min([frame_LO+600+600, numel(obj.video.lampOFF.mean_pixels)]);
-        	obj.plotMeanPixels('lampoff', ax(1), Limits);
-            xx = get(ax(1),'xlim');
-            plot(ax(1), xx, [obj.ROIs.lampOFF.threshold, obj.ROIs.lampOFF.threshold], 'm--')
-        	ylabel(ax(1), 'lampOff ROI')
+        	if isfield(obj.ROIs, 'lampOFF')
+                obj.plotMeanPixels('lampoff', ax(1), Limits);
+                xx = get(ax(1),'xlim');
+                plot(ax(1), xx, [obj.ROIs.lampOFF.threshold, obj.ROIs.lampOFF.threshold], 'm--')
+        	    ylabel(ax(1), 'lampOff ROI')
+            else
+                obj.plotMeanPixels('cue', ax(1), Limits);
+                xx = get(ax(1),'xlim');
+                plot(ax(1), xx, [obj.ROIs.cue.threshold, obj.ROIs.cue.threshold], 'm--')
+        	    ylabel(ax(1), 'cue ROI')
+            end
         	title(ax(1), ['Trial #' num2str(trialNo)])
         	obj.plotMeanPixels('lick', ax(2), Limits);
             plot(ax(2), xx, [obj.ROIs.lick.threshold, obj.ROIs.lick.threshold], 'm--')
         	ylabel(ax(2), 'lick ROI')
-        	title(ax(2), '')
+        	title(ax(2), '')    		
         	for ii=1:2
         		xlim(ax(ii), [frame_LO-600, frame_LO+600])
         		yy = get(ax(ii), 'ylim');
@@ -879,13 +1221,23 @@ classdef CLASS_video_lick_obj < handle
                 plot(ax(ii), [frame_cue,frame_cue], yy, 'r.-')
         		% pp = [[obj.video.lick_bt_wrtc_frames{trialNo}+frame_cue;obj.video.lick_bt_wrtc_frames{trialNo}+frame_cue],[yy(1).*ones(size(obj.video.lick_bt_wrtc_frames{trialNo}));yy(2).*ones(size(obj.video.lick_bt_wrtc_frames{trialNo}))]];
                 xs = obj.video.lick_bt_wrtlo_frames{trialNo}+frame_LO;%obj.video.lick_bt_wrtlo_frames{trialNo}+frame_LO];
-        		if ~isempty(xs),xline(ax(ii), xs, 'g-', 'linewidth', 1), end
+        		if ~isempty(xs)
+        			xline(ax(ii), xs, 'g-', 'linewidth', 1)
+        		end
 
-    			xs = obj.CED.lick_bt_wrtlo_frames{trialNo}+frame_LO;%obj.CED.lick_bt_wrtlo_frames{trialNo}+frame_LO];
-        		if ~isempty(xs),xline(ax(ii), xs, 'k-'), end
+    			% xs = obj.CED.lick_bt_wrtlo_frames{trialNo}+frame_LO;%obj.CED.lick_bt_wrtlo_frames{trialNo}+frame_LO];
+        		% if ~isempty(xs),xline(ax(ii), xs, 'k-'), end
+        		lickframes_ced = obj.CED.lick_bt_wrtc_frames{trialNo}+frame_cue;
+        		if ~isempty(xs)
+        			xline(ax(ii), lickframes_ced, 'k-', 'linewidth', 1)
+        		end
                 ylim(ax(ii),yy)
         		% plot(ax(ii), [yy(1).*ones(numel(obj.video.lick_bt_wrtc_frames{trialNo});yy(2).*ones(numel(obj.video.lick_bt_wrtc_frames{trialNo})],[obj.video.lick_bt_wrtc_frames{trialNo};obj.video.lick_bt_wrtc_frames{trialNo}], yy, 'r--')
     		end
+
+    		Video1st = obj.video.flickswrtc_frames(trialNo);
+    		CED1st = obj.CED.flickswrtc_frames(trialNo);
+
     		linkaxes(ax, 'x');
     	end
     	function [trials_to_examine, differences] = findLickTimeDiscrepancies(obj, threshold_to_examine, differences)
@@ -946,20 +1298,28 @@ classdef CLASS_video_lick_obj < handle
                 if isempty(frameNo_missedLick), frameNo_missedLick = obj.video.lick.frames(find(obj.video.lick.frames > obj.CED.CamO_cue_frames_wrt_IRtrig(trialNo),1, 'first'));end
                 % frameNo_missedLick = obj.video.flickswrtc_frames(trialNo) + obj.CED.CamO_cue_frames_wrt_IRtrig(trialNo);
 
-				ax = obj.timeseriesROIcomparison(trialNo);
-                try
+				[ax, CED1st, Video1st] = obj.timeseriesROIcomparison(trialNo);
+				try
                     xlim(ax(1), [obj.video.lampOFF.frames(trialNo)-10, obj.CED.CamO_lampOn_frames_wrt_IRtrig(trialNo)+50])
                 catch
                     warning('there''s an issue with ced/cam alignment')
                 end
+				if Video1st == CED1st || Video1st == CED1st+1 || Video1st == CED1st-1
+					disp('Looks good! proceeding')
+					okTrials(end+1) = trialNo;
+					obj.analysis.okTrials(end+1) = trialNo;
+					close all
+					continue
+				end
+                
 				f_ROI = gcf;
                 ax2 = obj.plot(frameNo_missedLick);
                 f_mus = gcf;
                 [f_mus2,ax3] = makeStandardFigure(3, [1, 3]);
                 set(f_mus2, 'Position', [0.0639         0    0.9361    0.3856])
-				ax3(1) = obj.plot(frameNo_missedLick-1, ax3(1));
-                ax3(2) = obj.plot(frameNo_missedLick, ax3(2));
-                ax3(3) = obj.plot(frameNo_missedLick+1, ax3(3));
+				ax3(1) = obj.plot(frameNo_missedLick, ax3(1));
+                ax3(2) = obj.plot(frameNo_missedLick+1, ax3(2));
+                ax3(3) = obj.plot(frameNo_missedLick+2, ax3(3));
 				
 				t = ax2.Title.String;
 				t = sprintf([t, '\n', Str]);
@@ -969,19 +1329,19 @@ classdef CLASS_video_lick_obj < handle
 				% 	'Grooming',...
 				% 	'Ok',...
 				% 	'Grooming');
-				answer = NonmodalQuestdlg([ 0.6 , 0.1 ],'How should this trial be categorized?',['Suspect trial ' num2str(ii) '/' num2str(numel(obj.analysis.trials_to_examine))],...
-					'Missed Lick (CED or Video)',...
+				answer = NonmodalQuestdlg([ 0.55 , 0.85 ],'How should this trial be categorized?',['Suspect trial ' num2str(ii) '/' num2str(numel(obj.analysis.trials_to_examine))],...
+					'Missed Lick (CED)',...
 					'Grooming',...
 					'Ok',...
 					'Grooming');
-				if strcmp(answer, 'Missed Lick (CED or Video)')
-					if obj.analysis.differences(trialNo) > 0
-						video_missed_trials(end+1) = trialNo;
-						obj.analysis.video_missed_trials(end+1) = trialNo;
-					else
+				if strcmp(answer, 'Missed Lick (CED)')
+					% if obj.analysis.differences(trialNo) > 0
+					% 	video_missed_trials(end+1) = trialNo;
+					% 	obj.analysis.video_missed_trials(end+1) = trialNo;
+					% else
 						CED_missed_trials(end+1) = trialNo;
 						obj.analysis.CED_missed_trials(end+1) = trialNo;
-					end
+					% end
 				elseif strcmp(answer, 'Grooming')
 					groomingTrials(end+1) = trialNo;
 					obj.analysis.groomingTrials(end+1) = trialNo;
