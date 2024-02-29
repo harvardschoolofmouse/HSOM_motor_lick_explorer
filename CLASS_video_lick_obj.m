@@ -825,10 +825,10 @@ classdef CLASS_video_lick_obj < handle
                 temp = num2cell(obj.CED.CamO_s_trim(CEDframe:end));
 				[obj.videomap(VideoFrame+1:VideoFrame+numel(temp)).time_min] = temp{:};
             else
-                warning('rbf')
-                temp = num2cell(obj.CED.CamO_s_trim(CEDframe:CEDframe+numel(obj.videomap)-CEDframe));
-				[obj.videomap(VideoFrame+1:end).time_min] = temp;
+                temp = num2cell(obj.CED.CamO_s_trim(CEDframe:numel(obj.videomap)));
+				[obj.videomap(VideoFrame+1:VideoFrame+numel(temp)).time_min] = temp{:};
 			end
+
 
 			%
 
@@ -1197,13 +1197,15 @@ classdef CLASS_video_lick_obj < handle
         		frame_cue = obj.video.cue.frames(trialNo);
     		end
         	if nargin < 3, [f,ax] = makeStandardFigure(2, [2,1]);set(f, 'units', 'normalized', 'position', [ 0    0.4456    0.5583    0.4667]);end
-        	Limits = max([1,frame_LO-50-600]): min([frame_LO+600+600, numel(obj.video.lampOFF.mean_pixels)]);
+        	
         	if isfield(obj.ROIs, 'lampOFF')
+        		Limits = max([1,frame_LO-50-600]): min([frame_LO+600+600, numel(obj.video.lampOFF.mean_pixels)]);
                 obj.plotMeanPixels('lampoff', ax(1), Limits);
                 xx = get(ax(1),'xlim');
                 plot(ax(1), xx, [obj.ROIs.lampOFF.threshold, obj.ROIs.lampOFF.threshold], 'm--')
         	    ylabel(ax(1), 'lampOff ROI')
             else
+            	Limits = max([1,frame_LO-50-600]): min([frame_LO+600+600, numel(obj.video.cue.mean_pixels)]);
                 obj.plotMeanPixels('cue', ax(1), Limits);
                 xx = get(ax(1),'xlim');
                 plot(ax(1), xx, [obj.ROIs.cue.threshold, obj.ROIs.cue.threshold], 'm--')
