@@ -50,10 +50,10 @@ classdef CLASS_video_lick_obj < handle
             obj.save(true);
             disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
 
-            if useCueROI
+			if useCueROI
 				disp(' => Get all ROIs for cue and lick')
-	            obj.detectCue;
-	            obj.detectLicks;
+	            obj.setAllROIs('cue');
+	            obj.detectMultiEvents('cue');
 	            obj.save(false);
 	            disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
 	            
@@ -65,8 +65,8 @@ classdef CLASS_video_lick_obj < handle
             	obj.iv.CUEtriggered = true;
         	else
 	            disp(' => Get all ROIs for lampOff and lick')
-	            obj.setAllROIs
-	            obj.detectMultiEvents;
+	            obj.setAllROIs('lampoff');
+	            obj.detectMultiEvents('lampoff');
 	            obj.save(false);
 	            disp(' 		*** can safely kill here or pause if you''ve made a mistake.')
 	            
@@ -308,6 +308,13 @@ classdef CLASS_video_lick_obj < handle
 			% concatenate the mean_pixels...
 			obj.video.cue.mean_pixels = cell2mat(mean_pixels);			
 		end
+		function detectMouse(obj)
+    		Style = 'MOUSE';
+    		[Pixels, mean_pixels] = obj.detectROI(Style);
+			obj.video.mouse.mean_pixels_by_video = mean_pixels;
+			% concatenate the mean_pixels...
+			obj.video.mouse.mean_pixels = cell2mat(mean_pixels);			
+		end
 		function detectLampOff(obj, useStoredROI)
     		Style = 'LAMPOFF';
     		[Pixels, mean_pixels] = obj.detectROI(Style);
@@ -315,7 +322,7 @@ classdef CLASS_video_lick_obj < handle
 			% concatenate the mean_pixels...
 			obj.video.lampOFF.mean_pixels = cell2mat(mean_pixels);			
 		end
-		function detectMultiEvents(obj)
+		function detectMultiEvents(obj, Mode)
 			% 
 			% 	Using stored ROIs, process the whole video only once
 			% 
@@ -328,7 +335,7 @@ classdef CLASS_video_lick_obj < handle
                 videoidx = videoidx(2:end,:);
             end
 			obj.iv.videoidx = videoidx;
-			obj.ROI_detector_multi(videoidx);
+			obj.ROI_detector_multi(videoidx, Mode);
 			cd(retdir)		
 		end
 		function [Pixels, mean_pixels] = detectROI(obj, Style)
@@ -373,10 +380,16 @@ classdef CLASS_video_lick_obj < handle
 			obj.updateROIfieldROI(Style, ROIfield);
 			disp('-\ Finis')
 		end
-		function ROI_detector_multi(obj, videoidx)
+		function ROI_detector_multi(obj, videoidx, Mode)
+			if nargin < 2, Mode = 'lampOFF';end
 			% prepare container for ROI pixel intensity for each video
-			obj.video.lampOFF.mean_pixels_by_video = cell(numel(videoidx),1); 
+			if strcmpi(Mode, 'lampOFF')
+				obj.video.lampOFF.mean_pixels_by_video = cell(numel(videoidx),1); 
+			elseif strcmpi(Mode, 'cue')
+				obj.video.cue.mean_pixels_by_video = cell(numel(videoidx),1); 
+			end
 			obj.video.lick.mean_pixels_by_video = cell(numel(videoidx),1); 
+			obj.video.mouse.mean_pixels_by_video = cell(numel(videoidx),1); 
 			% iterate videos...
 			disp(['Gathering pixel data for all stored ROIs...'])
 			for fileNo = 1:numel(videoidx)
@@ -384,41 +397,79 @@ classdef CLASS_video_lick_obj < handle
 			    % open the relevant video
 				obj.getVideoHandle(fileNo);			    
 			    %% get the ROI and process all the videos
-			    obj.video.lampOFF.mean_pixels_by_video{fileNo} = nan(2,1);
+			    if strcmpi(Mode, 'lampOFF')
+				    obj.video.lampOFF.mean_pixels_by_video{fileNo} = nan(2,1);
+			    elseif strcmpi(Mode, 'cue')
+			    	obj.video.cue.mean_pixels_by_video{fileNo} = nan(2,1);
+		    	end
 			    obj.video.lick.mean_pixels_by_video{fileNo} = nan(2,1);
+			    obj.video.mouse.mean_pixels_by_video{fileNo} = nan(2,1);
 			    % for each timepoint, plot the video frame and then overlay the keypoints
 			    for i_timepoint = 1:obj.currentVid.NumFrames
-			        frame = obj.getFrame(i_timepoint);
-			        Pixels = frame(obj.ROIs.lampOFF.x_ix, obj.ROIs.lampOFF.y_ix);
-			        obj.video.lampOFF.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
+			    	if strcmpi(Mode, 'lampOFF')
+				        frame = obj.getFrame(i_timepoint);
+				        Pixels = frame(obj.ROIs.lampOFF.x_ix, obj.ROIs.lampOFF.y_ix);
+				        obj.video.lampOFF.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
+			        elseif strcmpi(Mode, 'cue')
+			        	frame = obj.getFrame(i_timepoint);
+				        Pixels = frame(obj.ROIs.cue.x_ix, obj.ROIs.cue.y_ix);
+				        obj.video.cue.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
+			        end
 
 			        Pixels = frame(obj.ROIs.lick.x_ix, obj.ROIs.lick.y_ix);
 			        obj.video.lick.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
+
+			        Pixels = frame(obj.ROIs.mouse.x_ix, obj.ROIs.mouse.y_ix);
+			        obj.video.mouse.mean_pixels_by_video{fileNo}(i_timepoint) = mean(mean(Pixels));
 			    end
 			end
 			% concatenate the mean_pixels...
-			obj.video.lampOFF.mean_pixels = cell2mat(obj.video.lampOFF.mean_pixels_by_video);	
-			obj.video.lick.mean_pixels = cell2mat(obj.video.lick.mean_pixels_by_video);				
+			if strcmpi(Mode, 'lampOFF')
+				obj.video.lampOFF.mean_pixels = cell2mat(obj.video.lampOFF.mean_pixels_by_video);	
+			elseif strcmpi(Mode, 'cue')
+				obj.video.cue.mean_pixels = cell2mat(obj.video.cue.mean_pixels_by_video);
+			end
+			obj.video.lick.mean_pixels = cell2mat(obj.video.lick.mean_pixels_by_video);
+			obj.video.mouse.mean_pixels = cell2mat(obj.video.mouse.mean_pixels_by_video);
 			disp('-\ Finis')
 		end
-		function setAllROIs(obj)
+		function setAllROIs(obj, Mode)
+			if nargin<2, Mode='lampoff';end
 			obj.getVideoHandle(1);
 			[f,ax] = obj.makeVideoFrame;
-			% get lamp off first
-			disp(' ==> Get the LAMP OFF ROI')
-			frame = obj.getFrame(1);
-            [roi_lampOFF, pos, x_ix, y_ix] = obj.getROI(ax, frame, 1);
-            ROIfield.pos = pos;
-            ROIfield.x_ix = x_ix;
-            ROIfield.y_ix = y_ix;
-            obj.updateROIfieldROI('LAMPOFF', ROIfield);
-
+			if strcmpi(Mode, 'lampOFF')
+				% get lamp off first
+				disp(' ==> Get the LAMP OFF ROI')
+				frame = obj.getFrame(1);
+	            [roi_lampOFF, pos, x_ix, y_ix] = obj.getROI(ax, frame, 1);
+	            ROIfield.pos = pos;
+	            ROIfield.x_ix = x_ix;
+	            ROIfield.y_ix = y_ix;
+	            obj.updateROIfieldROI('LAMPOFF', ROIfield);
+            elseif strcmpi(Mode, 'cue')
+            	% get cue first
+				disp(' ==> Get the CUE ROI')
+				frame = obj.getFrame(1);
+	            [roi_cue, pos, x_ix, y_ix] = obj.getROI(ax, frame, 1);
+	            ROIfield.pos = pos;
+	            ROIfield.x_ix = x_ix;
+	            ROIfield.y_ix = y_ix;
+	            obj.updateROIfieldROI('CUE', ROIfield);
+            end
             disp(' ==> Get the LICK ROI')
             [roi_lampOFF, pos, x_ix, y_ix] = obj.getROI(ax, 1, 1);
             ROIfield.pos = pos;
             ROIfield.x_ix = x_ix;
             ROIfield.y_ix = y_ix;
             obj.updateROIfieldROI('LICK', ROIfield);
+
+            disp(' ==> Get the MOUSE ROI')
+            [roi_mouse, pos, x_ix, y_ix] = obj.getROI(ax, 1, 1);
+            ROIfield.pos = pos;
+            ROIfield.x_ix = x_ix;
+            ROIfield.y_ix = y_ix;
+            obj.updateROIfieldROI('MOUSE', ROIfield);
+
 		end
 		function ROIfield = getROIfieldnameVideo(obj, Style)
 			if nargin < 2, Style = 'LICK';end
@@ -431,6 +482,9 @@ classdef CLASS_video_lick_obj < handle
             elseif strcmpi(Style, 'LAMPOFF')
                 ROIfield = obj.video.lampOFF;
                 disp('using lampOFF zone ROI')
+            elseif strcmpi(Style, 'MOUSE')
+                ROIfield = obj.video.mouse;
+                disp('using mouse zone ROI')
             elseif strcmpi(Style, 'UI')
                 ROIfield = obj.video.userROI;
                 disp('using userROI zone ROI')
@@ -446,6 +500,8 @@ classdef CLASS_video_lick_obj < handle
                 obj.video.cue = ROIfield;
             elseif strcmpi(Style, 'LAMPOFF')
                 obj.video.lampOFF = ROIfield;
+            elseif strcmpi(Style, 'MOUSE')
+                obj.video.mouse = ROIfield;
             elseif strcmpi(Style, 'UI')
                 obj.video.userROI = ROIfield;
             else
@@ -466,6 +522,10 @@ classdef CLASS_video_lick_obj < handle
             	if ~isfield(obj.ROIs, 'lampOFF'), obj.ROIs.lampOFF=[];end
                 ROIfield = obj.ROIs.lampOFF;
                 disp('using lampOFF zone ROI')
+            elseif strcmpi(Style, 'MOUSE')
+            	if ~isfield(obj.ROIs, 'mouse'), obj.ROIs.mouse=[];end
+                ROIfield = obj.ROIs.mouse;
+                disp('using MOUSE zone ROI')
             elseif strcmpi(Style, 'UI')
             	warning('no Style specified. Storing ROI data in obj.ROIs.userROI (overwriting if had before)')
             	if ~isfield(obj.ROIs, 'userROI'), obj.ROIs.userROI = [];end
@@ -483,6 +543,8 @@ classdef CLASS_video_lick_obj < handle
                 obj.ROIs.cue = ROIfield;
             elseif strcmpi(Style, 'LAMPOFF')
                 obj.ROIs.lampOFF = ROIfield;
+            elseif strcmpi(Style, 'MOUSE')
+                obj.ROIs.mouse = ROIfield;
             elseif strcmpi(Style, 'UI')
                 obj.ROIs.userROI = ROIfield;
             else
@@ -510,14 +572,28 @@ classdef CLASS_video_lick_obj < handle
             title(['Mean ' Style, ' ROI intensity, all ' num2str(numel(ROIfield.mean_pixels_by_video)) ' files'])
 		end
 		function ax = plot(obj, globalFrameNo, ax)
-            if nargin<3, ax = [];end
+			if nargin<3, ax = [];end
+			%
+			%	Check for frameshift first
+			%
+			globalFrameNoTitle = num2str(globalFrameNo);
+			if isfield(obj.iv,'frameshift')
+				% get global frame of the CED start on this trial:
+				frameshift_trial_start_frames_CED = obj.CED.CamO_trialStart_frames_wrt_IRtrig([obj.iv.frameshift.trialNo]);
+				requestframeisshifted = find(globalFrameNo>frameshift_trial_start_frames_CED, 1, 'first');
+				if ~isempty(requestframeisshifted)
+					totalframesshifted = sum([obj.iv.frameshift(1:requestframeisshifted).n_missed_frames]);
+					globalFrameNo = globalFrameNo - totalframesshifted;
+					globalFrameNoTitle = [globalFrameNoTitle ' - ' num2str(totalframesshifted)];
+				end
+			end
 			% this version will find the right file for you
 			fileNo = obj.videomap(globalFrameNo).fileNo;
 			i_timepoint = obj.videomap(globalFrameNo).frameNo_by_video;
 			time = obj.videomap(globalFrameNo).time_min;
 			ax = obj.plotFrame(i_timepoint, fileNo, ax);
 			t = ax.Title.String;
-			t = [t, ' | globalFrame#: ' num2str(globalFrameNo), ' | ' num2str(time) ' min'];
+			t = [t, ' | globalFrame#: ' globalFrameNoTitle, ' | ' num2str(time) ' min'];
 			title(ax, t);
 		end
 		function ax = plotFrame(obj, i_timepoint, fileNo, ax)
@@ -1353,24 +1429,34 @@ classdef CLASS_video_lick_obj < handle
 				end
 				close all
 			end
-			disp('~~~~~~~~~~~~~~~~~~~~~~~~')
-			disp(' Summary:')
-            CED_misses = numel(CED_missed_trials);
-            Video_misses = numel(video_missed_trials);
-            Grooming = numel(groomingTrials);
-            OK_Trials = numel(okTrials);
-			Summary = table(CED_misses,...
-                Video_misses,...
-                Grooming,...
-			    OK_Trials);
-			disp(Summary)
 
-			obj.analysis.Summary = Summary;
+			
 			obj.analysis.CED_missed_trials = CED_missed_trials;
 			obj.analysis.video_missed_trials = video_missed_trials;
 			obj.analysis.groomingTrials = groomingTrials;
 			obj.analysis.OK_Trials = OK_Trials;
+
+
+			obj.getLickQCSummary();
+
 			obj.save(false)
+		end
+		function getLickQCSummary(obj)
+			CED_missed_trials = obj.analysis.CED_missed_trials;
+			groomingTrials = obj.analysis.groomingTrials;
+			trialsParticipated = sum(~isnan(obj.CED.flickswrtc_s))
+
+			disp('~~~~~~~~~~~~~~~~~~~~~~~~')
+			disp(' Summary:')
+            CED_misses = numel(CED_missed_trials);
+            Grooming = numel(groomingTrials);
+            okTrialsAfterExcludingThese = trialsParticipated - CED_misses - Grooming;
+			Summary = table(trialsParticipated,...
+				CED_misses,...
+                Grooming,...
+                okTrialsAfterExcludingThese);
+			disp(Summary)
+			obj.analysis.Summary = Summary;
 		end
 	end
 end
