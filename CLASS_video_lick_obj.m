@@ -79,7 +79,7 @@ classdef CLASS_video_lick_obj < handle
             obj.getVideoTrialStartFrames;
             obj.alignCED_to_video;
             disp(' => Collecting user corrections to trial-start data...')
-            obj.UIcleanUpTrialStarts;
+            obj.UIcleanUpTrialStarts(true);
             obj.save(false);
             
             disp(' => Gathering lick data for comparisons...')
