@@ -1459,11 +1459,7 @@ classdef CLASS_video_lick_obj < handle
 			if nargin < 2, threshold_to_examine = 0.1;end
 			disp([' ==> Examining differences in lick-time between CED/video, threshold difference = ' num2str(threshold_to_examine), 's'])
 			obj.findLickTimeDiscrepancies(threshold_to_examine);
-            
-            if ~isempty(UIspecifytrials)
-                % we are examining UI specified trials
-                obj.analysis.trials_to_examine = UIspecifytrials;
-            end
+
 			if redo
 				CED_missed_trials = [];
 				obj.analysis.CED_missed_trials = [];
@@ -1483,7 +1479,9 @@ classdef CLASS_video_lick_obj < handle
 				obj.analysis.trials_to_examine(ismember(obj.analysis.trials_to_examine, alreadylabeled)) = [];
 				warning('rbf')
             end
-            
+            if ~isempty(UIspecifytrials), 
+                % we are examining UI specified trials
+                
 			for ii = 1:numel(obj.analysis.trials_to_examine)
                 
 				trialNo = obj.analysis.trials_to_examine(ii);
