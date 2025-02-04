@@ -4,7 +4,7 @@ authors:
 - family-names: "Hamilos"
   given-names: "Allison Elizabeth"
   orcid: "https://orcid.org/0000-0001-9486-0017"
-title: "The Harvard School of Mouse Video QC Lick Detection System"
+title: "The Harvard School of Mouse Video Lick Detection Quality Control Toolbox"
 version: 1.1.0
 date-released: 2025-01-25
 url: "https://github.com/harvardschoolofmouse/HSOM_motor_lick_explorer"
