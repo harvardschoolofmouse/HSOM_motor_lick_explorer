@@ -1,0 +1,10 @@
+cff-version: 1.1.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Hamilos"
+  given-names: "Allison Elizabeth"
+  orcid: "https://orcid.org/0000-0001-9486-0017"
+title: "The Harvard School of Mouse Video QC Lick Detection System"
+version: 1.1.0
+date-released: 2025-02-25
+url: "https://github.com/harvardschoolofmouse/HSOM_motor_lick_explorer"
